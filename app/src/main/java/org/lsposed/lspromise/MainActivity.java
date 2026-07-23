@@ -8,7 +8,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcel;
@@ -21,9 +20,6 @@ import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.TextView;
 
-/**
- * @author canyie
- */
 public class MainActivity extends Activity implements View.OnClickListener {
     private PhoneAccountHandle phoneAccountHandle;
     private TelecomManager telecomManager;
@@ -39,17 +35,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 try {
                     if (controller.transact(code, p, r, 0)) {
                         var res = r.readInt();
-                        runOnUiThread(() -> {
-                            tv.append(name + " res=" + res + "\n");
-                        });
+                        runOnUiThread(() -> tv.append(name + " res=" + res + "\n"));
                     } else {
                         throw new IllegalStateException("return false");
                     }
                 } catch (Throwable t) {
                     Log.e(TAG, "do action " + code + " " + name, t);
-                    runOnUiThread(() -> {
-                        tv.append(name + " failed: " + t.getMessage() + "\n");
-                    });
+                    runOnUiThread(() -> tv.append(name + " failed: " + t.getMessage() + "\n"));
                 } finally {
                     p.recycle();
                     r.recycle();
@@ -74,30 +66,21 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 .build();
         telecomManager.registerPhoneAccount(phoneAccount);
         findViewById(R.id.exploit).setOnClickListener(this);
-        tv = (TextView) findViewById(R.id.status);
+        tv = findViewById(R.id.status);
         var patchMod = (Button) findViewById(R.id.patchMod);
-        patchMod.setOnClickListener(v -> {
-            doAction(1, "patchMod");
-        });
+        patchMod.setOnClickListener(v -> doAction(1, "patchMod"));
         var patchLibc = (Button) findViewById(R.id.patchLibc);
-        patchLibc.setOnClickListener(v -> {
-            doAction(2, "patchLibc");
-        });
+        patchLibc.setOnClickListener(v -> doAction(2, "patchLibc"));
         var patchCxx = (Button) findViewById(R.id.patchCxx);
-        patchCxx.setOnClickListener(v -> {
-            doAction(3, "patchCxx");
-        });
+        patchCxx.setOnClickListener(v -> doAction(3, "patchCxx"));
         var forkProcess = (Button) findViewById(R.id.forkProcess);
-        forkProcess.setOnClickListener(v -> {
-            doAction(4, "forkProcess");
-        });
+        forkProcess.setOnClickListener(v -> doAction(4, "forkProcess"));
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 Log.d(TAG, "controller received");
                 try {
-                    var binder = intent.getExtras().getBinder("CONTROLLER");
-                    controller = binder;
+                    controller = intent.getExtras().getBinder("CONTROLLER");
                     tv.append("controller received\n");
                     patchMod.setVisibility(View.VISIBLE);
                     patchLibc.setVisibility(View.VISIBLE);

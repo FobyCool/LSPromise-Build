@@ -1,6 +1,9 @@
 package org.lsposed.lspromise;
 
+import android.annotation.SuppressLint;
 import android.app.ActivityThread;
+import android.app.Application;
+import android.app.ApplicationLoaders;
 import android.app.IApplicationThread;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -9,13 +12,14 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.os.Binder;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.os.Parcel;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.util.ArrayMap;
 import android.util.Log;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 public class Shellcode extends BroadcastReceiver {
@@ -47,6 +51,7 @@ public class Shellcode extends BroadcastReceiver {
 
             Object activityManagerService = ServiceManager.getService(Context.ACTIVITY_SERVICE);
             ClassLoader classLoader = activityManagerService.getClass().getClassLoader();
+            @SuppressLint("PrivateApi")
             Class<?> ActivityManagerService = classLoader.loadClass("com.android.server.am.ActivityManagerService");
             Method getProcessRecordLocked = ActivityManagerService.getDeclaredMethod("getProcessRecordLocked", String.class, int.class);
             getProcessRecordLocked.setAccessible(true);
@@ -118,6 +123,42 @@ public class Shellcode extends BroadcastReceiver {
             stage2(context);
         } catch (Throwable t) {
             Log.e(TAG, "handle receive", t);
+        }
+        // Cleanup cached class loader so next run will correctly use updated apk
+        try {
+            ActivityThread activityThread = ActivityThread.currentActivityThread();
+            @SuppressLint("SoonBlockedPrivateApi")
+            Field mResourcesManager = ActivityThread.class.getDeclaredField("mResourcesManager");
+            mResourcesManager.setAccessible(true);
+            @SuppressLint("DiscouragedPrivateApi")
+            Field mPackages = ActivityThread.class.getDeclaredField("mPackages");
+            mPackages.setAccessible(true);
+            // noinspection all
+            ArrayMap<String, ?> packages = (ArrayMap<String, ?>) mPackages.get(activityThread);
+            synchronized (mResourcesManager.get(activityThread)) {
+                packages.remove(BuildConfig.APPLICATION_ID);
+            }
+
+            Field sApplications = Class.forName("android.app.LoadedApk")
+                    .getDeclaredField("sApplications");
+            sApplications.setAccessible(true);
+            ArrayMap<String, Application> cachedApplications = (ArrayMap<String, Application>) sApplications.get(null);
+            synchronized (cachedApplications) {
+                cachedApplications.remove(BuildConfig.APPLICATION_ID);
+            }
+
+            ClassLoader classLoader = context.getClassLoader();
+            Field mLoaders = ApplicationLoaders.class.getDeclaredField("mLoaders");
+            mLoaders.setAccessible(true);
+            ArrayMap<String, ClassLoader> cachedClassLoaders = (ArrayMap<String, ClassLoader>) mLoaders.get(ApplicationLoaders.getDefault());
+            synchronized (cachedClassLoaders) {
+                int index = cachedClassLoaders.indexOfValue(classLoader);
+                if (index >= 0) {
+                    cachedClassLoaders.removeAt(index);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to cleanup loaded apk", e);
         }
     }
 }
