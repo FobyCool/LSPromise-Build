@@ -455,7 +455,7 @@ static int patch_file(const char *path, char *addr, size_t len, size_t foff, int
         //LOGD("do_one_write #%d at off=0x%lx", i, (long) off);
         if (i % 100 == 0) {
             LOGD("wrote %d", i * 4);
-            REPORT("wrote %d ...", i*4);
+            REPORT("%d ...", i*4);
         }
     }
     LOGI("wrote %d bytes to %s starting at 0x%x", len, path, foff);

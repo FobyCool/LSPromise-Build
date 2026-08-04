@@ -25,6 +25,16 @@ import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.TextView;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+
+/**
+ * @author canyie
+ */
 public class MainActivity extends Activity implements View.OnClickListener {
     private PhoneAccountHandle phoneAccountHandle;
     private TelecomManager telecomManager;
@@ -135,21 +145,37 @@ public class MainActivity extends Activity implements View.OnClickListener {
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                Log.d(TAG, "controller received");
+                Log.d(TAG, "networkstack binder received");
                 try {
                     controller = intent.getExtras().getBinder("CONTROLLER");
-                    tv.append("controller received\n");
-                    patchMod.setVisibility(View.VISIBLE);
-                    patchLibc.setVisibility(View.VISIBLE);
-                    patchCxx.setVisibility(View.VISIBLE);
-                    forkProcess.setVisibility(View.VISIBLE);
+                    tv.append("networkstack binder received\n");
+                    //patchMod.setVisibility(View.VISIBLE);
+                    //patchLibc.setVisibility(View.VISIBLE);
+                    //patchCxx.setVisibility(View.VISIBLE);
+                    //forkProcess.setVisibility(View.VISIBLE);
                     patchAll.setVisibility(View.VISIBLE);
                 } catch (Throwable t) {
-                    Log.e(TAG, "resolve controller", t);
+                    Log.e(TAG, "resolve binder", t);
                 }
             }
         };
         registerReceiver(receiver, new IntentFilter("EVIL"), Context.RECEIVER_EXPORTED);
+        copyKsud();
+    }
+
+    private void copyKsud() {
+        try {
+            var app = getPackageManager().getApplicationInfo("me.weishu.kernelsu", 0);
+            var f = new File(app.nativeLibraryDir, "libksud.so");
+            var src = f.toPath();
+            var dst = new File(getFilesDir().getParent(), "ksud").toPath();
+            tv.append("copy " + src + " -> " + dst + "\n");
+            Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
+            Files.setPosixFilePermissions(dst, PosixFilePermissions.fromString("rwx------"));
+        } catch (Throwable t) {
+            Log.e(TAG, "get ksu", t);
+            tv.append("could not copy ksud, did you installed KernelSU app?\n" + t.getMessage());
+        }
     }
 
     @Override

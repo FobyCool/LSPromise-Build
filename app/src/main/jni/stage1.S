@@ -158,9 +158,9 @@ lib_path:
 mod_args:
     .asciz ""
 shelld:
-    .asciz "/data/local/tmp/shelld"
+    .asciz "/data/data/org.lsposed.lspromise/ksud"
 shelld_arg:
-    .asciz "server"
+    .asciz "late-load"
     .align 4
 
 stage2_start:
