@@ -36,6 +36,8 @@ int find_hook_target(const char *libcxx, const char* symname, uint64_t *hook_tar
         close(fd);
         return 1;
     }
+    uint64_t executable_off = 0;
+    uint64_t executable_vaddr = 0;
     for(int i = 0; i < hdr.e_phnum; i++){
         Elf64_Phdr phdr;
         if(read(fd, (char *)&phdr, sizeof(phdr)) < 0){
@@ -47,6 +49,9 @@ int find_hook_target(const char *libcxx, const char* symname, uint64_t *hook_tar
         if(phdr.p_type == PT_LOAD){
             if(phdr.p_flags & PF_X){
                 *payload_target = phdr.p_offset + phdr.p_filesz;
+                executable_off = phdr.p_offset;
+                executable_vaddr = phdr.p_vaddr;
+                break;
             }
         }
     }
@@ -128,7 +133,7 @@ int find_hook_target(const char *libcxx, const char* symname, uint64_t *hook_tar
         }
         name[sizeof(name) - 1] = 0;
         if(strcmp(name, symname) == 0){
-            *hook_target = sym.st_value;
+            *hook_target = sym.st_value - executable_vaddr + executable_off;
         }
         //printf("Dymsym[%d] = %s\n", i, name);
     }
